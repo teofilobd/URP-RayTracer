@@ -1,0 +1,56 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+struct Triangle
+{
+    int id0, id1, id2;
+};
+
+struct PlaneInfo
+{
+    float3 normal;
+    float distance;
+};
+
+StructuredBuffer<PlaneInfo> _FrustumPlanes;
+StructuredBuffer<float3> _Vertices;
+RWStructuredBuffer<Triangle> _Triangles;
+
+bool InsideFrustum(Triangle tri)
+{
+    float3 v1 = _Vertices[tri.id0];
+    float3 v2 = _Vertices[tri.id1];
+    float3 v3 = _Vertices[tri.id2];
+
+    for (int pId = 0; pId < 6; ++pId)
+    {
+        PlaneInfo plane = _FrustumPlanes[pId];
+        if (dot(v1, plane.normal) + plane.distance < 0.0f &&
+            dot(v2, plane.normal) + plane.distance < 0.0f &&
+            dot(v3, plane.normal) + plane.distance < 0.0f)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+[numthreads(32,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    uint indicesCount, indicesStride;
+
+    Triangle nullTriangle = { -1, -1, -1 };
+
+    _Triangles.GetDimensions(indicesCount, indicesStride);
+
+    if(id.x < indicesCount)
+    {
+        Triangle tri = _Triangles[id.x];
+
+        if (!InsideFrustum(tri))
+        {
+            _Triangles[id.x] = nullTriangle;
+        }
+    }
+}
